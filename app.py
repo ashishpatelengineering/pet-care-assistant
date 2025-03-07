@@ -25,7 +25,7 @@ st.set_page_config(
 st.title("Smart Pet Care Assistant")
 
 def get_gemini_response(image):
-    """Enhanced image analysis prompt"""
+    """Image analysis prompt"""
     model = genai.GenerativeModel(model_name="gemini-2.0-flash-exp")
     prompt = """Analyze this pet photo and provide:
     1. Breed identification with confidence level
@@ -44,10 +44,9 @@ def initialize_agent():
         model=Gemini(id="gemini-2.0-flash-exp"),
         instructions=[
             "You're a veterinary-trained AI that provides evidence-based pet care advice.",
-            "Prioritize observable factors from images and owner-reported information.",
-            "Recommend products only from certified pet care brands and veterinary-approved sources.",
-            "Always consider breed-specific needs and potential health risk factors.",
-            "Present information in clear sections with emoji icons for readability.",
+            "Combine image analysis with owner-provided information for recommendations.",
+            "Recommend products only from certified sources.",
+            "Present information in clear sections with emoji icons.",
         ],
         tools=[FirecrawlTools(api_key=FIRCRAWL_API_KEY)],
         markdown=True
@@ -55,82 +54,80 @@ def initialize_agent():
 
 pet_care_agent = initialize_agent()
 
-# Image Analysis Section
-with st.expander("📸 Pet Photo Analysis", expanded=True):
+# Image Upload Section
+with st.expander("📸 Upload Pet Photo", expanded=True):
     image_file = st.file_uploader(
         "Upload clear pet photo (JPEG/PNG)",
         type=["jpg", "jpeg", "png"],
-        help="Clear face/body shots work best for accurate analysis"
+        help="Clear face/body shots work best"
     )
-    
     if image_file:
-        try:
-            image = Image.open(image_file)
-            st.image(image, use_column_width=True)
-            
-            with st.spinner("🔍 Analyzing pet characteristics..."):
-                analysis = get_gemini_response(image)
-                st.subheader("Initial Health Assessment")
-                st.write(analysis)
-                
-        except Exception as e:
-            st.error(f"Image processing error: {str(e)}")
+        image = Image.open(image_file)
+        st.image(image, use_column_width=True)
 
-# Care Recommendations Section
-with st.expander("💬 Personalized Care Consultation", expanded=True):
-    pet_profile = st.text_input("Pet's name (optional)", help="For personalized recommendations")
+# Consultation Form
+with st.expander("💬 Pet Details & Consultation", expanded=True):
+    pet_name = st.text_input("Pet's name (optional)")
     
     col1, col2 = st.columns(2)
     with col1:
-        pet_age = st.number_input("Approximate age", min_value=0, max_value=30, help="Years")
+        pet_age = st.number_input("Age", min_value=0, max_value=30)
         diet_needs = st.multiselect(
-            "Dietary considerations",
+            "Dietary needs",
             ["Weight Management", "Allergies", "Puppy/Kitten", "Senior", "Prescription Diet"]
         )
         
     with col2:
         health_priority = st.selectbox(
-            "Primary health focus",
+            "Health focus",
             ("Preventive Care", "Skin/Coat", "Dental", "Mobility", "Behavioral")
         )
-        observed_behavior = st.text_area(
-            "Recent changes or concerns",
+        observations = st.text_area(
+            "Behavior/Changes",
             placeholder="e.g., itching, lethargy, appetite changes",
             height=100
         )
 
-    if st.button("🚀 Generate Care Plan", type="primary"):
+    if st.button("🚀 Generate Full Report", type="primary"):
         if not image_file:
-            st.warning("Please upload a pet photo first")
+            st.warning("Please upload a pet photo")
         else:
             try:
-                consultation_prompt = f"""
-                **Pet Profile**
-                - Name: {pet_profile}
-                - Age: {pet_age} years
-                - Dietary Needs: {', '.join(diet_needs)}
-                - Health Priority: {health_priority}
-                - Observations: {observed_behavior}
-                
-                **Owner Request**
-                Comprehensive care plan covering:
-                1. Nutrition recommendations
-                2. Preventive care measures
-                3. Behavioral/environmental suggestions
-                4. Recommended health monitoring
-                
-                Include product links where appropriate.
-                """
-                
-                with st.spinner("📋 Creating customized care plan..."):
-                    response = pet_care_agent.run(consultation_prompt, image=image)
+                with st.spinner("🔍 Analyzing..."):
+                    # Get image analysis
+                    image = Image.open(image_file)
+                    analysis = get_gemini_response(image)
                     
-                st.subheader("📝 Your Pet's Care Plan")
+                    # Create combined prompt
+                    consultation_prompt = f"""
+                    **Visual Analysis**:
+                    {analysis}
+
+                    **Owner-Reported Details**:
+                    - Name: {pet_name}
+                    - Age: {pet_age} years
+                    - Dietary Needs: {', '.join(diet_needs)}
+                    - Health Priority: {health_priority}
+                    - Observations: {observations}
+
+                    **Required**:
+                    1. Combined health assessment
+                    2. Nutrition plan
+                    3. Care recommendations
+                    4. Monitoring checklist
+                    """
+                    
+                    # Get care plan
+                    response = pet_care_agent.run(consultation_prompt)
+                
+                st.subheader("Initial Health Assessment")
+                st.write(analysis)
+                st.subheader("📝 Comprehensive Care Plan")
                 st.markdown(response.content)
                 
-            except Exception as error:
-                st.error(f"Analysis error: {str(error)}")
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
 
-# Add subtle branding
+# Footer
 st.markdown("---")
 st.caption("🐾 Powered by Veterinary AI • Trusted Pet Care Since 2024")
