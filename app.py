@@ -12,7 +12,7 @@ load_dotenv()
 
 # Load API keys from Streamlit Secrets
 GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
-FIRECRAWL_API_KEY = st.secrets["FIRECRAWL_API_KEY"]
+FIRCRAWL_API_KEY = st.secrets["FIRCRAWL_API_KEY"]
 
 # Configure API Key
 API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -40,7 +40,7 @@ pet_agent = Agent(
         "Always recommend professional veterinary care if necessary.",
         "Format responses clearly and user-friendly for pet owners.",
     ],
-    tools=[FirecrawlTools(api_key=FIRECRAWL_API_KEY)],
+    tools=[FirecrawlTools(api_key=FIRCRAWL_API_KEY)],
     markdown=True
 )
 
