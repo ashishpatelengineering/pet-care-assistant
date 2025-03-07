@@ -53,8 +53,16 @@ pet_agent = initialize_agent()
 # File Uploader
 image_file = st.file_uploader("Upload a clear photo of your pet for wellness analysis", type=["jpg", "jpeg", "png"], help="Ensure good lighting and clarity for best analysis")
 
-prompt = "Analyze this pet photo for wellness assessment. Consider breed, weight, coat condition, and health indicators."
-if image_file is not None:
+# User Inputs
+pet_age = st.number_input("Pet's Age (in months)", min_value=1, max_value=360, value=6)
+primary_concern = st.selectbox("Primary Concern", ["Routine checkup", "Skin & Coat", "Digestion", "Behavior", "Weight Management"])
+current_diet = st.text_input("Current Diet", placeholder="Enter brand/type of food")
+owner_query = st.text_area(
+    "Any specific questions or concerns?",                 
+    placeholder="Ask any wellness-related questions about your pet",
+    help="The AI will provide customized insights based on your pet's image and details."")
+
+if image_file:
     try:
         # Open and display the uploaded image
         image = Image.open(image_file)
@@ -62,55 +70,26 @@ if image_file is not None:
         
         # Get AI response using the image
         with st.spinner("Analyzing your pet's wellness..."):
+            prompt = "Analyze this pet photo for wellness assessment. Consider breed, weight, coat condition, and health indicators."
             analysis = analyze_pet_image(API_KEY, prompt, image)
-            st.subheader("Pet Wellness Overview")
-            st.write(analysis)
+            
+            prompt_details = f"""
+            Pet Age: {pet_age} months
+            Concern: {primary_concern}
+            Diet: {current_diet}
+            {owner_query}
+            Provide general wellness insights and care recommendations.
+            """
+            
+            response = pet_agent.run(prompt_details, image=image)
+        
+        st.subheader("Pet Wellness Overview")
+        st.write(analysis)
+        st.subheader("Personalized Wellness Advice")
+        st.markdown(response.content)
         
     except Exception as e:
         st.error(f"Error: Unable to process image. {e}")
-    
-    # Additional User Inputs
-    pet_age = st.number_input("Pet's Age (in months)", min_value=1, max_value=360, value=6)
-    primary_concern = st.selectbox("Primary Concern", ["Routine checkup", "Skin & Coat", "Digestion", "Behavior", "Weight Management"])
-    current_diet = st.text_input("Current Diet", placeholder="Enter brand/type of food")
-    owner_query = st.text_area(
-        "Any specific questions or concerns?",                 
-        placeholder="Ask any wellness-related questions about your pet",
-        help="The AI will provide customized insights based on your pet's image and details."
-    )
-    
-    if st.button("Get Wellness Insights"):
-        if not owner_query:
-            st.warning("Please enter a concern or question for better insights.")
-        else:
-            try:
-                with st.spinner("Gathering personalized wellness insights..."):
-                    prompt_details = f"""
-                    Pet Age: {pet_age} months
-                    Concern: {primary_concern}
-                    Diet: {current_diet}
-                    {owner_query}
-                    Provide general wellness insights and care recommendations.
-                    """
-                    
-                    response = pet_agent.run(prompt_details, image=image)
-                
-                st.subheader("Personalized Wellness Advice")
-                st.markdown(response.content)
-            except Exception as error:
-                st.error(f"An error occurred during analysis: {error}")
-    
-    # Customize text area height
-    st.markdown(
-        """
-        <style>
-        .stTextArea textarea{
-            height:100px;   
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
 
 # Footer
 st.markdown("---")
