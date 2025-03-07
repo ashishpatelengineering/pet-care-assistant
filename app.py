@@ -8,84 +8,104 @@ from phi.model.google import Gemini
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # Page Setup
-st.set_page_config(page_title="Pet Health Assistant", page_icon="🐾", layout="centered")
-st.title("Simple Pet Checkup")
+st.set_page_config(page_title="PawCheck Pro", page_icon="🐾", layout="centered")
+st.title("PawCheck Pro")
+st.caption("Smart Pet Health Scanning for Modern Owners")
 
-def analyze_pet_image(image):
+def analyze_pet_health(image):
     model = genai.GenerativeModel("gemini-2.0-flash-exp")
     response = model.generate_content([
-        "Analyze this pet photo for veterinary assessment. Focus on:",
-        "- Breed identification",
-        "- Visible health indicators",
-        "- Weight estimation",
-        "- Coat/skin condition",
-        "Format: Plain text observations",
-        image
+        Image.open(image),
+        "Analyze this pet photo for key health indicators:",
+        "1. Body Condition Score (1-9 scale)",
+        "2. Coat/skin health (poor/fair/good)",
+        "3. Eye/nose/ear abnormalities",
+        "4. Visible signs of discomfort",
+        "Format: Concise bullet points"
     ])
     return response.text
 
-def generate_report(agent, analysis, details):
+def generate_health_report(agent, analysis, details):
     prompt = f"""
-    **Pet Photo Analysis**:
+    **Animal**: {details['species']} ({details['age']} months)
+    **Owner Concerns**: {details['concern']}
+
+    **Visual Analysis**:
     {analysis}
 
-    **Owner Input**:
-    {details}
-
-    Create structured report with:
-    1. Immediate care recommendations
-    2. Food suggestions (base on life stage)
-    3. Health monitoring checklist
-    4. When to see a vet
+    Create veterinary-style report:
+    1. Health Summary (3 key points)
+    2. Home Care Protocol (daily/weekly)
+    3. Red Flag Alerts (when to seek vet)
+    4. Preventive Recommendations
     """
     return agent.run(prompt).content
 
 # Initialize AI
-pet_agent = Agent(
+med_agent = Agent(
     model=Gemini(id="gemini-2.0-flash-exp"),
-    instructions="Provide concise, actionable pet care advice. Prioritize common health issues."
+    instructions="You are a veterinary assistant. Provide professional but owner-friendly advice."
 )
 
-# Image Upload
-uploaded_image = st.file_uploader("Take/upload pet photo", type=["jpg", "jpeg", "png"])
+# --- Core Interface ---
+with st.container():
+    col1, col2 = st.columns([2, 3])
+    with col1:
+        st.subheader("1. Pet Profile")
+        species = st.radio("Species", ("Dog", "Cat"), horizontal=True)
+        pet_name = st.text_input("Name", placeholder="Optional")
+        age = st.slider("Age (months)", 1, 360, 24)
+        concern = st.selectbox(
+            "Main Concern",
+            ("General Checkup", "Skin/Coat Issues", "Low Energy", 
+             "Eating Problems", "Behavior Changes")
+        )
+        
+    with col2:
+        st.subheader("2. Health Scan")
+        uploaded_image = st.camera_input("Take clear photo", 
+            help="Full body profile, good lighting")
 
-# Essential Inputs
-with st.form("pet_info"):
-    age = st.number_input("Pet's age (months)", min_value=1, max_value=360, value=6)
-    main_concern = st.selectbox(
-        "Main concern",
-        ("Healthy checkup", "Skin issues", "Digestion", "Behavior", "Weight")
-    )
-    current_food = st.text_input("Current food", placeholder="Brand/type")
-    
-    if st.form_submit_button("Generate Report"):
-        if not uploaded_image:
-            st.warning("Please upload a photo")
-        else:
-            with st.spinner("Creating report..."):
-                try:
-                    # Process image
-                    img = Image.open(uploaded_image)
-                    analysis = analyze_pet_image(img)
-                    
-                    # Prepare inputs
-                    details = f"""
-                    - Age: {age} months
-                    - Concern: {main_concern}
-                    - Current Food: {current_food}
-                    """
-                    
-                    # Generate report
-                    st.subheader("Basic Health Check")
-                    st.write(analysis)
-                    
-                    report = generate_report(pet_agent, analysis, details)
-                    st.subheader("Care Instructions")
-                    st.markdown(report)
-                    
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
+# --- Report Generation ---
+if uploaded_image and st.button("Generate Health Report"):
+    with st.spinner("Analyzing..."):
+        try:
+            # Process inputs
+            analysis = analyze_pet_health(uploaded_image)
+            details = {
+                "species": species,
+                "age": age,
+                "concern": concern
+            }
+            
+            # Generate report
+            report = generate_health_report(med_agent, analysis, details)
+            
+            # Display results
+            st.divider()
+            if pet_name:
+                st.subheader(f"{pet_name}'s Health Report")
+            else:
+                st.subheader("Pet Health Report")
+                
+            st.image(uploaded_image, width=300)
+            st.markdown(report)
+            
+            # Business CTA
+            st.divider()
+            st.success("**Professional Follow-Up Available**")
+            st.write("Book a video consultation with certified veterinarians:")
+            st.page_link("https://example.com/pro_consults", label="Schedule Now →")
+            
+        except Exception as e:
+            st.error(f"Analysis failed: {str(e)}")
 
 # Footer
-st.markdown("---")
-st.caption("Always consult a veterinarian for serious health issues")
+st.divider()
+st.markdown("""
+**Enterprise Solutions Available**  
+*For clinics, shelters, and pet care brands*  
+→ Custom white-label versions  
+→ API integration  
+→ Bulk health screening  
+""")
