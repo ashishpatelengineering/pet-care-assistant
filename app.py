@@ -8,142 +8,87 @@ from phi.model.google import Gemini
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # Page Setup
-st.set_page_config(
-    page_title="VetScan AI",
-    page_icon="📋",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="Pet Wellness Assistant", page_icon="🐾", layout="centered")
+st.title("Pet Wellness Assistant")
+st.markdown("Helping you understand your pet's well-being 🐶🐱")
 
-# Custom CSS for professional look
-st.markdown("""
-<style>
-    .header { color: #2E86C1; font-weight: 700; }
-    .report-section { border-left: 4px solid #2E86C1; padding-left: 1rem; }
-    footer { color: #7F8C8D; font-size: 0.9rem; }
-</style>
-""", unsafe_allow_html=True)
-
-# --- App Header ---
-st.markdown('<p class="header" style="font-size:2.5em;">VetScan AI</p>', unsafe_allow_html=True)
-st.caption("Clinical-Grade Pet Health Analysis")
-
-# --- Core Functions ---
-def clinical_image_analysis(image):
+def analyze_pet_image(image):
     model = genai.GenerativeModel("gemini-2.0-flash-exp")
     response = model.generate_content([
-        Image.open(image),
-        "Clinical analysis of animal patient. Focus on:",
-        "- Body Condition Score (1-9 scale)",
-        "- Hydration status indicators",
-        "- Coat/skin abnormalities",
-        "- Ocular/nasal discharge",
-        "- Musculoskeletal alignment",
-        "Format: Medical observation notes"
+        "Analyze this pet photo for general wellness assessment. Focus on:",
+        "- Possible breed identification",
+        "- Visible health indicators",
+        "- Estimated weight",
+        "- Coat and skin condition",
+        "Format: Simple and user-friendly insights",
+        image
     ])
     return response.text
 
-def generate_clinical_report(agent, analysis, metadata):
+def generate_recommendations(agent, analysis, details):
     prompt = f"""
-    **Patient Metadata**
-    Species: {metadata['species']}
-    Age: {metadata['age_months']} months
-    Primary Concern: {metadata['concern']}
-
-    **Clinical Observations**
+    **Pet Wellness Check Summary**:
     {analysis}
 
-    Generate veterinary report:
-    1. Clinical Summary
-    2. Differential Diagnoses (3 most likely)
-    3. Recommended Diagnostics
-    4. Home Care Protocol
-    5. Referral Indications
+    **Owner's Input**:
+    {details}
+
+    Provide:
+    1. Basic care recommendations
+    2. Nutrition suggestions based on age
+    3. Common health signs to monitor
+    4. When professional veterinary care is needed
     """
     return agent.run(prompt).content
 
-# Initialize Medical AI
-clinical_agent = Agent(
+# Initialize AI
+pet_agent = Agent(
     model=Gemini(id="gemini-2.0-flash-exp"),
-    instructions="You are a veterinary diagnostic assistant. Maintain professional medical standards."
+    instructions="Provide clear, practical pet wellness advice. Keep it simple and actionable."
 )
 
-# --- Input Section ---
-with st.container():
-    col1, col2 = st.columns(2)
-    with col1:
-        species = st.radio(
-            "Species",
-            ("Canine", "Feline"),
-            index=0,
-            horizontal=True
-        )
-    with col2:
-        age = st.number_input(
-            "Age (months)",
-            min_value=1,
-            max_value=360,
-            value=24,
-            step=1
-        )
+# Image Upload
+uploaded_image = st.file_uploader("Upload a clear photo of your pet", type=["jpg", "jpeg", "png"])
 
-concern = st.selectbox(
-    "Presenting Complaint",
-    ("Routine Wellness Check", "Dermatological Concerns", 
-     "Gastrointestinal Symptoms", "Behavioral Changes",
-     "Musculoskeletal Issues", "Ocular/Nasal Abnormalities")
-)
+# User Input
+with st.form("pet_info"):
+    age = st.number_input("Pet's age (months)", min_value=1, max_value=360, value=6)
+    concern = st.selectbox(
+        "What's your primary concern?",
+        ("Routine checkup", "Skin & coat", "Digestion", "Behavior", "Weight management")
+    )
+    diet = st.text_input("Current diet", placeholder="Brand/type of food")
+    
+    submit = st.form_submit_button("Get Wellness Report")
 
-# --- Medical Imaging Upload ---
-st.divider()
-clinical_image = st.file_uploader(
-    "Upload Clinical Image",
-    type=["jpg", "jpeg", "png"],
-    help="High-resolution image showing affected area and full body profile"
-)
+if submit:
+    if not uploaded_image:
+        st.warning("Please upload a photo of your pet.")
+    else:
+        with st.spinner("Analyzing your pet's wellness..."):
+            try:
+                # Process image
+                img = Image.open(uploaded_image)
+                analysis = analyze_pet_image(img)
+                
+                # User details
+                details = f"""
+                - Age: {age} months
+                - Concern: {concern}
+                - Current Diet: {diet}
+                """
+                
+                # Generate recommendations
+                st.subheader("Pet Wellness Overview")
+                st.write(analysis)
+                
+                recommendations = generate_recommendations(pet_agent, analysis, details)
+                st.subheader("Personalized Care Advice")
+                st.markdown(recommendations)
+                
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
 
-# --- Report Generation ---
-if clinical_image and st.button("Generate Clinical Report"):
-    with st.spinner("Performing Analysis..."):
-        try:
-            # Display image
-            img = Image.open(clinical_image)
-            st.image(img, width=350, caption="Clinical Image Preview")
-            
-            # Process analysis
-            analysis = clinical_image_analysis(clinical_image)
-            metadata = {
-                "species": species,
-                "age_months": age,
-                "concern": concern
-            }
-            
-            # Generate report
-            report = generate_clinical_report(clinical_agent, analysis, metadata)
-            
-            # Display clinical report
-            st.divider()
-            st.markdown('<div class="report-section">', unsafe_allow_html=True)
-            st.markdown("### Clinical Findings Summary")
-            st.markdown(report)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Professional footer
-            st.divider()
-            st.markdown("""
-            **Clinical Disclaimer**  
-            This AI analysis (ID: VS-{timestamp}) is not a substitute for professional veterinary examination.  
-            Always consult a licensed veterinarian for medical decisions.
-            """)
-            
-        except Exception as e:
-            st.error(f"Clinical analysis failed: {str(e)}")
-
-# --- Enterprise Footer ---
-st.divider()
-st.markdown("""
-<footer>
-    © 2024 VetScan AI | HIPAA-Compliant Architecture | ISO 13485 Certified  
-    For veterinary professional use only | v2.4.1-clinical
-</footer>
-""", unsafe_allow_html=True)
+# Footer
+st.markdown("---")
+st.caption("Note: This tool provides general wellness insights. Consult a vet for professional medical advice.")
