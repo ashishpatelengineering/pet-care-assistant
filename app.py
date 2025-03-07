@@ -12,7 +12,7 @@ load_dotenv()
 
 # Load API keys from Streamlit Secrets
 GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
-FIRCRAWL_API_KEY = st.secrets["FIRCRAWL_API_KEY"]
+FIRECRAWL_API_KEY = st.secrets["FIRECRAWL_API_KEY"]
 
 # Configure API Key
 API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -40,12 +40,17 @@ pet_agent = Agent(
         "Always recommend professional veterinary care if necessary.",
         "Format responses clearly and user-friendly for pet owners.",
     ],
-    tools=[FirecrawlTools(api_key=FIRCRAWL_API_KEY)],
+    tools=[FirecrawlTools(api_key=FIRECRAWL_API_KEY)],
     markdown=True
 )
 
 # File Uploader
 image_file = st.file_uploader("Upload a clear photo of your pet for wellness analysis", type=["jpg", "jpeg", "png"], help="Ensure good lighting and clarity for best analysis")
+
+# Display Image Immediately if Uploaded
+if image_file:
+    image = Image.open(image_file)
+    st.image(image, caption="Uploaded Pet Image", use_column_width=True)
 
 # User Inputs
 pet_age = st.number_input("Pet's Age (in months)", min_value=1, max_value=360, value=6)
@@ -59,10 +64,6 @@ owner_query = st.text_area(
 if st.button("Analyze Pet Wellness"):
     if image_file:
         try:
-            # Open and display the uploaded image
-            image = Image.open(image_file)
-            st.image(image, caption="Uploaded Pet Image", use_column_width=True)
-            
             # Generate wellness report
             with st.spinner("Analyzing your pet's wellness..."):
                 prompt_details = f"""
