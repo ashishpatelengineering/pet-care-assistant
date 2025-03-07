@@ -1,94 +1,117 @@
 import streamlit as st
 from PIL import Image
-import google.generativeai as genai
 from phi.agent import Agent
 from phi.model.google import Gemini
+import google.generativeai as genai
+import os
+from dotenv import load_dotenv
 
-# Configure API Keys
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+# Load environment variables
+load_dotenv()
 
-# Page Setup
-st.set_page_config(page_title="Pet Wellness Assistant", page_icon="🐾", layout="centered")
-st.title("Pet Wellness Assistant")
-st.markdown("Helping you understand your pet's well-being 🐶🐱")
+# Load API key from Streamlit Secrets
+GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 
-def analyze_pet_image(image):
-    model = genai.GenerativeModel("gemini-2.0-flash-exp")
-    response = model.generate_content([
-        "Analyze this pet photo for general wellness assessment. Focus on:",
-        "- Possible breed identification",
-        "- Visible health indicators",
-        "- Estimated weight",
-        "- Coat and skin condition",
-        "Format: Simple and user-friendly insights",
-        image
-    ])
-    return response.text
+# Configure API Key
+API_KEY = os.getenv("GOOGLE_API_KEY")
+if API_KEY:
+    genai.configure(api_key=API_KEY)
 
-def generate_recommendations(agent, analysis, details):
-    prompt = f"""
-    **Pet Wellness Check Summary**:
-    {analysis}
-
-    **Owner's Input**:
-    {details}
-
-    Provide:
-    1. Basic care recommendations
-    2. Nutrition suggestions based on age
-    3. Common health signs to monitor
-    4. When professional veterinary care is needed
-    """
-    return agent.run(prompt).content
-
-# Initialize AI
-pet_agent = Agent(
-    model=Gemini(id="gemini-2.0-flash-exp"),
-    instructions="Provide clear, practical pet wellness advice. Keep it simple and actionable."
+# Page Configuration
+st.set_page_config(
+    page_title="Pet Wellness Assistant",
+    page_icon="🐾",
+    layout="centered"
 )
 
-# Image Upload
-uploaded_image = st.file_uploader("Upload a clear photo of your pet", type=["jpg", "jpeg", "png"])
+st.title("Pet Wellness Assistant")
+st.header("Helping you understand your pet's well-being 🐶🐱")
 
-# User Input
-with st.form("pet_info"):
-    age = st.number_input("Pet's age (months)", min_value=1, max_value=360, value=6)
-    concern = st.selectbox(
-        "What's your primary concern?",
-        ("Routine checkup", "Skin & coat", "Digestion", "Behavior", "Weight management")
+def analyze_pet_image(api_key, prompt, image):
+    """Analyze pet image using Gemini AI."""
+    model = genai.GenerativeModel(model_name="gemini-2.0-flash-exp")
+    response = model.generate_content([prompt, image])
+    return response.text
+
+def initialize_agent():
+    return Agent(
+        name="Pet Wellness Advisor",
+        model=Gemini(id="gemini-2.0-flash-exp"),  
+        instructions=[
+            "You are a pet wellness advisor providing insights on pet health, breed identification, and care.",
+            "Assess visible health indicators such as skin condition, weight, and coat quality.",
+            "Give general advice on pet nutrition, exercise, and wellness based on the image.",
+            "Always recommend professional veterinary care if necessary.",
+            "Format responses clearly and user-friendly for pet owners.",
+        ],
+        markdown=True
     )
-    diet = st.text_input("Current diet", placeholder="Brand/type of food")
-    
-    submit = st.form_submit_button("Get Wellness Report")
 
-if submit:
-    if not uploaded_image:
-        st.warning("Please upload a photo of your pet.")
-    else:
+# Initialize the Agent
+pet_agent = initialize_agent()
+
+# File Uploader
+image_file = st.file_uploader("Upload a clear photo of your pet for wellness analysis", type=["jpg", "jpeg", "png"], help="Ensure good lighting and clarity for best analysis")
+
+prompt = "Analyze this pet photo for wellness assessment. Consider breed, weight, coat condition, and health indicators."
+if image_file is not None:
+    try:
+        # Open and display the uploaded image
+        image = Image.open(image_file)
+        st.image(image, caption="Uploaded Pet Image", use_column_width=True)
+        
+        # Get AI response using the image
         with st.spinner("Analyzing your pet's wellness..."):
+            analysis = analyze_pet_image(API_KEY, prompt, image)
+            st.subheader("Pet Wellness Overview")
+            st.write(analysis)
+        
+    except Exception as e:
+        st.error(f"Error: Unable to process image. {e}")
+    
+    # Additional User Inputs
+    pet_age = st.number_input("Pet's Age (in months)", min_value=1, max_value=360, value=6)
+    primary_concern = st.selectbox("Primary Concern", ["Routine checkup", "Skin & Coat", "Digestion", "Behavior", "Weight Management"])
+    current_diet = st.text_input("Current Diet", placeholder="Enter brand/type of food")
+    owner_query = st.text_area(
+        "Any specific questions or concerns?",                 
+        placeholder="Ask any wellness-related questions about your pet",
+        help="The AI will provide customized insights based on your pet's image and details."
+    )
+    
+    if st.button("Get Wellness Insights"):
+        if not owner_query:
+            st.warning("Please enter a concern or question for better insights.")
+        else:
             try:
-                # Process image
-                img = Image.open(uploaded_image)
-                analysis = analyze_pet_image(img)
+                with st.spinner("Gathering personalized wellness insights..."):
+                    prompt_details = f"""
+                    Pet Age: {pet_age} months
+                    Concern: {primary_concern}
+                    Diet: {current_diet}
+                    {owner_query}
+                    Provide general wellness insights and care recommendations.
+                    """
+                    
+                    response = pet_agent.run(prompt_details, image=image)
                 
-                # User details
-                details = f"""
-                - Age: {age} months
-                - Concern: {concern}
-                - Current Diet: {diet}
-                """
-                
-                # Generate recommendations
-                st.subheader("Pet Wellness Overview")
-                st.write(analysis)
-                
-                recommendations = generate_recommendations(pet_agent, analysis, details)
-                st.subheader("Personalized Care Advice")
-                st.markdown(recommendations)
-                
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
+                st.subheader("Personalized Wellness Advice")
+                st.markdown(response.content)
+            except Exception as error:
+                st.error(f"An error occurred during analysis: {error}")
+    
+    # Customize text area height
+    st.markdown(
+        """
+        <style>
+        .stTextArea textarea{
+            height:100px;   
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
 # Footer
 st.markdown("---")
-st.caption("Note: This tool provides general wellness insights. Consult a vet for professional medical advice.")
+st.caption("Note: This tool provides general wellness insights. Always consult a veterinarian for professional medical advice.")
