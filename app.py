@@ -60,7 +60,7 @@ current_diet = st.text_input("Current Diet", placeholder="Enter brand/type of fo
 owner_query = st.text_area(
     "Any specific questions or concerns?",                 
     placeholder="Ask any wellness-related questions about your pet",
-    help="The AI will provide customized insights based on your pet's image and details."")
+    help="The AI will provide customized insights based on your pet's image and details.")
 
 if image_file:
     try:
