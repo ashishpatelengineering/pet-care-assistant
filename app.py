@@ -1,149 +1,93 @@
 import streamlit as st
 from PIL import Image
+import google.generativeai as genai
 from phi.agent import Agent
 from phi.model.google import Gemini
 from phi.tools.firecrawl import FirecrawlTools
-import google.generativeai as genai
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # Configure API Keys
-FIRCRAWL_API_KEY = st.secrets["FIRCRAWL_API_KEY"]
-GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
-genai.configure(api_key=GOOGLE_API_KEY)
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
-# Page Configuration
-st.set_page_config(
-    page_title="Pet Care Expert",
-    layout="centered",
-    page_icon="🐾"
-)
+# Page Setup
+st.set_page_config(page_title="Pet Care Assistant", page_icon="🐶", layout="centered")
+st.title("Pet Health Check")
 
-st.title("Smart Pet Care Assistant")
-
-def get_gemini_response(image):
-    """Image analysis prompt"""
-    model = genai.GenerativeModel(model_name="gemini-2.0-flash-exp")
-    prompt = """Analyze this pet photo and provide:
-    1. Breed identification with confidence level
-    2. Estimated age range
-    3. Visible weight assessment
-    4. Coat/skin condition observations
-    5. Notable physical features
-    6. Immediate care recommendations"""
-    
-    response = model.generate_content([prompt, image])
+def analyze_pet_image(image):
+    model = genai.GenerativeModel("gemini-2.0-flash-exp")
+    response = model.generate_content([
+        "Analyze this pet photo for:",
+        "- Breed (confidence %)",
+        "- Estimated age range",
+        "- Weight assessment", 
+        "- Visible health indicators",
+        "Format: Clear bullet points",
+        image
+    ])
     return response.text
 
-def initialize_agent():
-    return Agent(
-        name="Pet Care Expert",
-        model=Gemini(id="gemini-2.0-flash-exp"),
-        instructions=[
-            "You're a veterinary-trained AI that provides evidence-based pet care advice.",
-            "Combine image analysis with owner-provided information for recommendations.",
-            "Recommend products only from certified sources.",
-            "Present information in clear sections with emoji icons.",
-        ],
-        tools=[FirecrawlTools(api_key=FIRCRAWL_API_KEY)],
-        markdown=True
-    )
+def generate_care_plan(agent, analysis, details):
+    prompt = f"""
+    **Pet Analysis**:
+    {analysis}
 
-pet_care_agent = initialize_agent()
+    **Owner Input**:
+    {details}
 
-# Image Upload Section
-with st.expander("📸 Upload Pet Photo", expanded=True):
-    image_file = st.file_uploader(
-        "Upload clear pet photo (JPEG/PNG)",
-        type=["jpg", "jpeg", "png"],
-        help="Clear face/body shots work best"
-    )
-    if image_file:
-        image = Image.open(image_file)
-        st.image(image, use_container_width=True)
+    Create care plan with:
+    1. Nutrition (specific food types)
+    2. Exercise recommendations
+    3. Health monitoring checklist
+    4. Immediate action items
+    """
+    return agent.run(prompt).content
 
-# ... (keep all previous imports and setup code identical)
+# Initialize AI Agent
+pet_agent = Agent(
+    model=Gemini(id="gemini-2.0-flash-exp"),
+    tools=[FirecrawlTools(api_key=st.secrets["FIRCRAWL_API_KEY"])],
+    instructions="Provide practical, veterinary-verified advice in clear sections."
+)
 
-# Consultation Form
-with st.expander("💬 Pet Details & Consultation", expanded=True):
-    pet_name = st.text_input("Pet's name (optional)")
+# Image Upload
+image_file = st.file_uploader("Upload pet photo", type=["jpg", "jpeg", "png"])
+if image_file:
+    st.image(Image.open(image_file), width=300)
+
+# Simple Form
+with st.form("pet_details"):
+    st.subheader("Pet Information")
+    age_months = st.number_input("Age (months)", min_value=1, max_value=360, value=12)
+    health_notes = st.text_input("Main health concern", placeholder="Skin, digestion, etc.")
+    diet_notes = st.text_area("Food preferences/allergies", height=80)
     
-    col1, col2 = st.columns(2)
-    with col1:
-        # Modified age input with months
-        age_months = st.number_input(
-            "Age (months)", 
-            min_value=0, 
-            max_value=360,  # 30 years maximum
-            help="For pets under 2 years, enter exact months. For older pets, approximate in months (e.g., 36 = 3 years)"
-        )
-        diet_needs = st.multiselect(
-            "Dietary needs",
-            ["Weight Management", "Allergies", "Puppy/Kitten", "Senior", "Prescription Diet"]
-        )
-        
-    with col2:
-        health_priority = st.selectbox(
-            "Health focus",
-            ("Preventive Care", "Skin/Coat", "Dental", "Mobility", "Behavioral")
-        )
-        observations = st.text_area(
-            "Behavior/Changes",
-            placeholder="e.g., itching, lethargy, appetite changes",
-            height=100
-        )
-
-    if st.button("🚀 Generate Full Report", type="primary"):
+    if st.form_submit_button("Get Care Plan"):
         if not image_file:
-            st.warning("Please upload a pet photo")
+            st.warning("Please upload a photo first")
         else:
-            try:
-                with st.spinner("🔍 Analyzing..."):
-                    image = Image.open(image_file)
-                    analysis = get_gemini_response(image)
+            with st.spinner("Analyzing..."):
+                try:
+                    # Image Analysis
+                    img = Image.open(image_file)
+                    analysis = analyze_pet_image(img)
                     
-                    # Convert months to years for display
-                    years = age_months // 12
-                    remaining_months = age_months % 12
-                    age_display = ""
-                    if years > 0:
-                        age_display += f"{years} year{'s' if years > 1 else ''}"
-                    if remaining_months > 0:
-                        age_display += f" {remaining_months} month{'s' if remaining_months > 1 else ''}"
-                    
-                    consultation_prompt = f"""
-                    **Visual Analysis**:
-                    {analysis}
-
-                    **Owner-Reported Details**:
-                    - Name: {pet_name}
-                    - Age: {age_display.strip()} ({age_months} months)
-                    - Dietary Needs: {', '.join(diet_needs)}
-                    - Health Priority: {health_priority}
-                    - Observations: {observations}
-
-                    **Required**:
-                    1. Age-appropriate health assessment
-                    2. Developmental stage considerations
-                    3. Nutrition plan tailored to life stage
-                    4. Preventive care schedule
+                    # Prepare Details
+                    details = f"""
+                    - Age: {age_months} months
+                    - Health Focus: {health_notes}
+                    - Diet Notes: {diet_notes}
                     """
                     
-                    response = pet_care_agent.run(consultation_prompt)
-                
-                st.subheader("Initial Health Assessment")
-                st.write(analysis)
-                st.subheader("📝 Comprehensive Care Plan")
-                st.markdown(response.content)
-                
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-
-# ... (keep footer code identical)
+                    # Generate Recommendations
+                    st.subheader("Health Assessment")
+                    st.markdown(f"**Basic Analysis**\n{analysis}")
+                    
+                    care_plan = generate_care_plan(pet_agent, analysis, details)
+                    st.subheader("Care Plan")
+                    st.markdown(care_plan)
+                    
+                except Exception as e:
+                    st.error(f"Error generating plan: {str(e)}")
 
 # Footer
 st.markdown("---")
-st.caption("🐾 Powered by Veterinary AI • Trusted Pet Care Since 2024")
+st.caption("Professional veterinary advice should always be sought for serious health concerns")
