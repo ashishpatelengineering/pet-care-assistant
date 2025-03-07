@@ -63,7 +63,9 @@ with st.expander("📸 Upload Pet Photo", expanded=True):
     )
     if image_file:
         image = Image.open(image_file)
-        st.image(image, use_column_width=True)
+        st.image(image, use_container_width=True)
+
+# ... (keep all previous imports and setup code identical)
 
 # Consultation Form
 with st.expander("💬 Pet Details & Consultation", expanded=True):
@@ -71,7 +73,13 @@ with st.expander("💬 Pet Details & Consultation", expanded=True):
     
     col1, col2 = st.columns(2)
     with col1:
-        pet_age = st.number_input("Age", min_value=0, max_value=30)
+        # Modified age input with months
+        age_months = st.number_input(
+            "Age (months)", 
+            min_value=0, 
+            max_value=360,  # 30 years maximum
+            help="For pets under 2 years, enter exact months. For older pets, approximate in months (e.g., 36 = 3 years)"
+        )
         diet_needs = st.multiselect(
             "Dietary needs",
             ["Weight Management", "Allergies", "Puppy/Kitten", "Senior", "Prescription Diet"]
@@ -94,30 +102,36 @@ with st.expander("💬 Pet Details & Consultation", expanded=True):
         else:
             try:
                 with st.spinner("🔍 Analyzing..."):
-                    # Get image analysis
                     image = Image.open(image_file)
                     analysis = get_gemini_response(image)
                     
-                    # Create combined prompt
+                    # Convert months to years for display
+                    years = age_months // 12
+                    remaining_months = age_months % 12
+                    age_display = ""
+                    if years > 0:
+                        age_display += f"{years} year{'s' if years > 1 else ''}"
+                    if remaining_months > 0:
+                        age_display += f" {remaining_months} month{'s' if remaining_months > 1 else ''}"
+                    
                     consultation_prompt = f"""
                     **Visual Analysis**:
                     {analysis}
 
                     **Owner-Reported Details**:
                     - Name: {pet_name}
-                    - Age: {pet_age} years
+                    - Age: {age_display.strip()} ({age_months} months)
                     - Dietary Needs: {', '.join(diet_needs)}
                     - Health Priority: {health_priority}
                     - Observations: {observations}
 
                     **Required**:
-                    1. Combined health assessment
-                    2. Nutrition plan
-                    3. Care recommendations
-                    4. Monitoring checklist
+                    1. Age-appropriate health assessment
+                    2. Developmental stage considerations
+                    3. Nutrition plan tailored to life stage
+                    4. Preventive care schedule
                     """
                     
-                    # Get care plan
                     response = pet_care_agent.run(consultation_prompt)
                 
                 st.subheader("Initial Health Assessment")
@@ -127,6 +141,8 @@ with st.expander("💬 Pet Details & Consultation", expanded=True):
                 
             except Exception as e:
                 st.error(f"Error: {str(e)}")
+
+# ... (keep footer code identical)
 
 # Footer
 st.markdown("---")
